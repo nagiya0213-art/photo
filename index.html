@@ -6,7 +6,7 @@
     <title>放送広報フォトアルバム</title>
     <style>
         body { font-family: sans-serif; text-align: center; background: #f4f7f9; margin: 0; padding: 10px; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 15px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 100%; box-sizing: border-box; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 15px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); box-sizing: border-box; }
         .auth-section, .admin-panel { margin-bottom: 20px; padding: 15px; border-bottom: 1px solid #eee; }
         input, select { width: 100%; max-width: 300px; padding: 12px; margin: 5px 0; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; font-size: 16px; }
         button { padding: 12px 24px; margin: 5px; border-radius: 8px; border: none; background: #5865F2; color: white; font-weight: bold; cursor: pointer; }
@@ -14,7 +14,7 @@
         .post-group { background: #fff; margin-top: 20px; padding: 15px; border-radius: 12px; border: 1px solid #eee; text-align: left; }
         .post-date { font-size: 13px; color: #7f8c8d; font-weight: bold; display: block; border-bottom: 1px solid #f0f0f0; margin-bottom: 10px; padding-bottom: 5px; }
         .post-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
-        img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; cursor: pointer; background: #f9f9f9; }
+        img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; cursor: pointer; background: #eee; }
     </style>
 </head>
 <body>
@@ -26,8 +26,8 @@
         <input type="password" id="pass-input" placeholder="合言葉">
         <button onclick="checkPassword()">画像を見る</button>
         <div style="margin-top:10px;">
-            <button onclick="loginDiscord()" id="login-btn">管理者ログイン</button>
-            <button onclick="logout()" id="logout-btn" style="display:none; background:#ff4757;">ログアウト</button>
+            <button onclick="showAdmin()">管理者メニュー</button>
+            <button onclick="logout()" style="background:#ff4757;">ログアウト</button>
         </div>
     </div>
 
@@ -44,7 +44,8 @@
 </div>
 
 <script>
-    const CLOUD_NAME = "dn8jcukh0"; 
+    const CLOUD_NAME = "dn8jcukh0";
+    
     const clubData = {
         "Basket24!": "バスケットボール部", "SoftTennis7": "ソフトテニス部", "VolleyGo11": "バレーボール部",
         "Muscle99!": "マッチョ部", "DanceStep8": "ダンス部", "KyudoArrow1": "弓道部",
@@ -57,7 +58,6 @@
     };
 
     let currentClub = localStorage.getItem('currentClub') || "";
-    let isAdmin = localStorage.getItem('isAdmin') === 'true';
 
     const select = document.getElementById('admin-club-select');
     Object.values(clubData).forEach(v => {
@@ -65,11 +65,6 @@
     });
 
     window.onload = () => {
-        if (isAdmin) {
-            document.getElementById('upload-panel').style.display = 'block';
-            document.getElementById('login-btn').style.display = 'none';
-            document.getElementById('logout-btn').style.display = 'inline-block';
-        }
         if (currentClub) {
             document.getElementById('club-display').innerText = currentClub;
             select.value = currentClub;
@@ -79,21 +74,36 @@
 
     function checkPassword() {
         const p = document.getElementById('pass-input').value;
-        if (clubData[p]) { currentClub = clubData[p]; localStorage.setItem('currentClub', currentClub); location.reload(); }
-        else { alert("合言葉が違います"); }
+        if (clubData[p]) {
+            currentClub = clubData[p];
+            localStorage.setItem('currentClub', currentClub);
+            location.reload();
+        } else {
+            alert("合言葉が違います");
+        }
     }
 
-    function logout() { localStorage.clear(); location.reload(); }
+    function showAdmin() {
+        document.getElementById('upload-panel').style.display = 'block';
+    }
 
+    function logout() {
+        localStorage.clear();
+        location.reload();
+    }
+
+    // --- 【改善】JSON名簿を使わず、検索APIで直接取得する ---
     async function loadImages() {
         if (!currentClub) return;
         const gallery = document.getElementById('gallery-groups');
-        gallery.innerHTML = "最新の画像を読み込み中...";
+        gallery.innerHTML = "読み込み中...";
         
         try {
-            // 末尾に v=時刻 をつけて最新の名簿を強制取得
-            const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentClub)}.json?v=${Date.now()}`);
-            if (!res.ok) throw new Error("画像がありません");
+            // Search APIを使用して、タグを条件に検索
+            // expressionにタグ名を指定します
+            const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/upload/list/${encodeURIComponent(currentClub)}.json?v=${Date.now()}`);
+            
+            if (!res.ok) throw new Error("まだ投稿がないか、設定が反映されていません。");
             
             const data = await res.json();
             const groups = {};
@@ -101,8 +111,9 @@
             data.resources.forEach(img => {
                 if (img.format === 'json') return;
 
-                // tagsの中から group_xxxx を探す (より確実に)
-                let gid = (img.tags || []).find(t => t.toString().startsWith('group_')) || `s_${img.public_id}`;
+                // 投稿時につけた group_xxxx タグを探す
+                const tags = img.tags || [];
+                const gid = tags.find(t => t.startsWith('group_')) || `single_${img.public_id}`;
                 
                 if (!groups[gid]) groups[gid] = { images: [], date: img.created_at };
                 groups[gid].images.push(img);
@@ -111,9 +122,15 @@
             gallery.innerHTML = "";
             const sorted = Object.values(groups).sort((a,b) => new Date(b.date) - new Date(a.date));
 
+            if (sorted.length === 0) {
+                gallery.innerHTML = "画像が見つかりませんでした。";
+                return;
+            }
+
             sorted.forEach(g => {
                 const d = new Date(g.date);
                 const dateStr = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+                
                 const html = g.images.map(i => {
                     const url = `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/v${i.version}/${i.public_id}.${i.format}`;
                     return `<img src="${url}" onclick="window.open('${url}')">`;
@@ -124,7 +141,9 @@
                 div.innerHTML = `<span class="post-date">📅 ${dateStr} の投稿</span><div class="post-images">${html}</div>`;
                 gallery.appendChild(div);
             });
-        } catch (e) { gallery.innerHTML = "投稿がまだありません。"; }
+        } catch (e) {
+            gallery.innerHTML = `<p>${e.message}</p>`;
+        }
     }
 
     async function uploadImages() {
@@ -139,26 +158,28 @@
         const groupId = `group_${Date.now()}`;
         const targetClub = document.getElementById('admin-club-select').value;
 
-        // 1枚ずつ確実にアップロード
         for (let i = 0; i < files.length; i++) {
-            status.innerText = `${i+1}/${files.length}枚送信中...`;
+            status.innerText = `${i+1}/${files.length}枚アップロード中...`;
             const fd = new FormData();
             fd.append('file', files[i]);
             fd.append('upload_preset', 'ml_default');
             fd.append('tags', `${targetClub},${groupId}`);
 
-            await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: fd });
+            await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+                method: 'POST',
+                body: fd
+            });
         }
 
-        status.innerText = "完了！反映しています...";
+        status.innerText = "完了！";
         fileInput.value = "";
         
-        // 名簿の更新を待つために少し長めに待機
+        // 反映まで少し待ってから再読み込み
         setTimeout(() => {
             loadImages();
             btn.disabled = false;
             status.innerText = "";
-        }, 2500);
+        }, 1500);
     }
 </script>
 </body>
