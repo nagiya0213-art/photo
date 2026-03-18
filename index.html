@@ -13,10 +13,10 @@
         .img-card { background: #fff; padding: 10px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: relative; }
         img { width: 100%; height: 200px; object-fit: cover; border-radius: 5px; }
         .admin-panel { display: none; background: #eef2ff; padding: 20px; border-radius: 10px; border: 2px dashed #5865F2; margin-top: 20px; }
-        input, button { padding: 12px; margin: 5px; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; }
+        input, button, select { padding: 12px; margin: 5px; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; }
         button { cursor: pointer; transition: 0.3s; background: #5865F2; color: white; border: none; }
         button:hover { opacity: 0.8; }
-        .delete-btn { background: #ff4757; position: absolute; top: 15px; right: 15px; padding: 5px 10px; font-size: 12px; }
+        .delete-btn { background: #ff4757; position: absolute; top: 15px; right: 15px; padding: 5px 10px; font-size: 12px; border-radius: 5px; }
     </style>
 </head>
 <body>
@@ -25,7 +25,7 @@
     <h1>🏫 部活動フォトアルバム</h1>
 
     <div class="auth-section">
-        <input type="password" id="pass-input" placeholder="部活の合言葉を入力">
+        <input type="password" id="pass-input" placeholder="合言葉を入力">
         <button onclick="checkPassword()">画像を見る</button>
         <div id="admin-login-area" style="margin-top:15px;">
             <button onclick="loginDiscord()" style="background:#7289da;">管理者ログイン (Discord)</button>
@@ -34,7 +34,34 @@
 
     <div id="upload-panel" class="admin-panel">
         <h3>🛠 管理者メニュー</h3>
-        <p>「ナギヤのサーバー テスト」のメンバーのみ投稿・削除可能です</p>
+        <p>投稿先の部活を選んでから、画像をアップロードしてください</p>
+        
+        <select id="admin-club-select" onchange="syncClub()">
+            <option value="">-- 部活を選択 --</option>
+            <option value="バスケットボール部">バスケットボール部</option>
+            <option value="ソフトテニス部">ソフトテニス部</option>
+            <option value="バレーボール部">バレーボール部</option>
+            <option value="マッチョ部">マッチョ部</option>
+            <option value="ダンス部">ダンス部</option>
+            <option value="弓道部">弓道部</option>
+            <option value="水泳部">水泳部</option>
+            <option value="剣道部">剣道部</option>
+            <option value="応援部">応援部</option>
+            <option value="クリエイティ部">クリエイティ部</option>
+            <option value="被服手芸部">被服手芸部</option>
+            <option value="五光倶楽部">五光倶楽部</option>
+            <option value="吹奏楽部">吹奏楽部</option>
+            <option value="料理部">料理部</option>
+            <option value="演劇部">演劇部</option>
+            <option value="園芸部">園芸部</option>
+            <option value="書道部">書道部</option>
+            <option value="茶道部">茶道部</option>
+            <option value="写真部">写真部</option>
+            <option value="天文部">天文部</option>
+            <option value="学園長">学園長</option>
+            <option value="一般生徒">一般生徒</option>
+        </select>
+        <br>
         <input type="file" id="file-input" accept="image/*">
         <button onclick="uploadImage()">この部活のタグで投稿する</button>
     </div>
@@ -45,37 +72,23 @@
 
 <script>
     const CLOUD_NAME = "dn8jcukh0"; 
-    const DISCORD_CHANNEL_ID = "1483618553809731826";
-    const CLIENT_ID = "1483619678940303410"; 
+    const CLIENT_ID = "1483619678940303410";
 
     const clubData = {
-        "Basket24!": "バスケットボール部",
-        "SoftTennis7": "ソフトテニス部",
-        "VolleyGo11": "バレーボール部",
-        "Muscle99!": "マッチョ部",
-        "DanceStep8": "ダンス部",
-        "KyudoArrow1": "弓道部",
-        "SwimBlue25": "水泳部",
-        "KendoSpirit3": "剣道部",
-        "CheerUp55!": "応援部",
-        "CreativeLab9": "クリエイティ部",
-        "SewingTime6": "被服手芸部",
-        "GokouClub5": "五光倶楽部",
-        "BrassSound4": "吹奏楽部",
-        "CookingStar2": "料理部",
-        "TheaterAct7": "演劇部",
-        "GardenBloom8": "園芸部",
-        "Calligraphy10": "書道部",
-        "TeaZen12": "茶道部",
-        "PhotoSnap3": "写真部",
-        "StarSky88": "天文部",
-	"PrincipalZero0":"学園長",
-	"StudentBase0":"一般生徒"
+        "Basket24!": "バスケットボール部", "SoftTennis7": "ソフトテニス部", "VolleyGo11": "バレーボール部",
+        "Muscle99!": "マッチョ部", "DanceStep8": "ダンス部", "KyudoArrow1": "弓道部",
+        "SwimBlue25": "水泳部", "KendoSpirit3": "剣道部", "CheerUp55!": "応援部",
+        "CreativeLab9": "クリエイティ部", "SewingTime6": "被服手芸部", "GokouClub5": "五光倶楽部",
+        "BrassSound4": "吹奏楽部", "CookingStar2": "料理部", "TheaterAct7": "演劇部",
+        "GardenBloom8": "園芸部", "Calligraphy10": "書道部", "TeaZen12": "茶道部",
+        "PhotoSnap3": "写真部", "StarSky88": "天文部",
+        "PrincipalZero0": "学園長", "StudentBase0": "一般生徒"
     };
 
     let currentTag = "";
     let isAdmin = false;
 
+    // パスワードチェック
     function checkPassword() {
         const pass = document.getElementById('pass-input').value;
         if (clubData[pass]) {
@@ -87,59 +100,83 @@
         }
     }
 
+    // 管理者用セレクトボックス連動
+    function syncClub() {
+        const select = document.getElementById('admin-club-select');
+        if (select.value) {
+            currentTag = select.value;
+            document.getElementById('club-display').innerText = currentTag + " のギャラリー（管理者モード）";
+            loadImages();
+        }
+    }
+
+    // 画像読み込み
     async function loadImages() {
         const gallery = document.getElementById('gallery');
         gallery.innerHTML = "読み込み中...";
-        // Cloudinaryからタグ指定で画像を取得
-        const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentTag)}.json`);
-        const data = await res.json();
-        
-        gallery.innerHTML = "";
-        data.resources.forEach(img => {
-            const card = document.createElement('div');
-            card.className = 'img-card';
-            card.innerHTML = `<img src="https://res.cloudinary.com/${CLOUD_NAME}/image/upload/${img.public_id}.jpg">`;
-            if(isAdmin) {
-                const del = document.createElement('button');
-                del.innerText = "削除";
-                del.className = "delete-btn";
-                del.onclick = () => deleteImage(img.public_id);
-                card.appendChild(del);
-            }
-            gallery.appendChild(card);
-        });
+        try {
+            const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentTag)}.json`);
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            
+            gallery.innerHTML = "";
+            data.resources.forEach(img => {
+                const card = document.createElement('div');
+                card.className = 'img-card';
+                card.innerHTML = `<img src="https://res.cloudinary.com/${CLOUD_NAME}/image/upload/v${img.version}/${img.public_id}.${img.format}">`;
+                if(isAdmin) {
+                    const del = document.createElement('button');
+                    del.innerText = "削除";
+                    del.className = "delete-btn";
+                    del.onclick = () => deleteImage(img.public_id);
+                    card.appendChild(del);
+                }
+                gallery.appendChild(card);
+            });
+        } catch (e) {
+            gallery.innerHTML = "<p>まだ画像がないか、Cloudinaryの設定を確認してください。</p>";
+        }
     }
 
+    // Discordログイン
     function loginDiscord() {
         const url = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(window.location.href.split('#')[0])}&response_type=token&scope=identify%20guilds.members.read`;
         window.location.href = url;
     }
 
-    // ページ読み込み時にDiscord認証をチェック
-    window.onload = async () => {
+    // ログイン状態の確認
+    window.onload = () => {
         const params = new URLSearchParams(window.location.hash.slice(1));
         const token = params.get('access_token');
         if (token) {
-            // ここで本来はサーバーサイドでチャンネル権限をチェックしますが、
-            // 簡易的にログイン成功＝管理者として表示します（投稿時にエラー判定する仕組みを推奨）
             isAdmin = true;
             document.getElementById('upload-panel').style.display = 'block';
             document.getElementById('admin-login-area').style.display = 'none';
         }
     }
 
+    // アップロード
     async function uploadImage() {
-        if(!currentTag) return alert("先に合言葉を入れて部活を選んでね");
+        if(!currentTag) return alert("先に部活を選択してください");
         const file = document.getElementById('file-input').files[0];
-        if(!file) return alert("画像を選んでね");
+        if(!file) return alert("画像を選んでください");
 
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('upload_preset', 'ml_default'); // Cloudinaryの設定で作成したプリセット名
+        formData.append('upload_preset', 'ml_default');
         formData.append('tags', currentTag);
 
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
-        if(res.ok) { alert("投稿成功！"); loadImages(); }
+        try {
+            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
+            if(res.ok) {
+                alert("投稿成功！");
+                loadImages();
+            } else {
+                alert("投稿に失敗しました。CloudinaryのUpload Presetを確認してください。");
+            }
+        } catch (e) {
+            alert("エラーが発生しました。");
+        }
     }
 </script>
 
