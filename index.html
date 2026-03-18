@@ -18,10 +18,12 @@
         .post-group { background: #fff; margin-top: 20px; padding: 15px; border-radius: 12px; border: 1px solid #eee; text-align: left; }
         .post-date { font-size: 13px; color: #7f8c8d; font-weight: bold; display: block; border-bottom: 1px solid #f0f0f0; margin-bottom: 10px; padding-bottom: 5px; }
         .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
-        img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; cursor: pointer; background: #eee; }
+        img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; cursor: pointer; background: #eee; transition: transform 0.2s; }
+        img:active { transform: scale(0.95); }
         
         #status-msg { color: #5865F2; font-weight: bold; margin: 10px 0; font-size: 14px; }
         .refresh-btn { background: #95a5a6; font-size: 13px; }
+        .error-box { background: #fff3f3; color: #d63031; padding: 15px; border-radius: 10px; border: 1px solid #ffcccc; margin: 10px 0; font-size: 13px; text-align: left; }
     </style>
 </head>
 <body>
@@ -148,17 +150,31 @@
         }
     }
 
+    // ✨ 404エラー対策済みの画像取得処理
     async function loadImages() {
         if (!currentTag) return;
         const container = document.getElementById('gallery-container');
         container.innerHTML = "読込中...";
         
         try {
-            const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentTag)}.json?cb=${Date.now()}`);
-            if (!res.ok) throw new Error();
-            const data = await res.json();
+            const listUrl = `https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentTag)}.json?cb=${Date.now()}`;
+            const res = await fetch(listUrl);
             
+            if (!res.ok) {
+                // 404エラー（リスト機能オフ）の場合の専用メッセージ
+                container.innerHTML = `
+                    <div class="error-box">
+                        <strong>⚠️ 画像リストの取得に失敗しました (404)</strong><br>
+                        Cloudinaryの設定で「Resource list」が制限されている可能性があります。<br>
+                        <br>
+                        <small>解決策: Cloudinary管理画面 > Settings > Security > Restricted image types の「Resource list」のチェックを外して保存してください。</small>
+                    </div>`;
+                return;
+            }
+
+            const data = await res.json();
             const groups = {};
+            
             data.resources.forEach(img => {
                 if (img.format === 'json') return;
                 const gid = (img.tags || []).find(t => t.startsWith('group_')) || `s_${img.public_id}`;
@@ -169,11 +185,10 @@
             const sortedGroups = Object.values(groups).sort((a, b) => new Date(b.date) - new Date(a.date));
 
             if (sortedGroups.length === 0) {
-                container.innerHTML = "<p>まだ画像がありません。</p>";
+                container.innerHTML = "<p>まだ画像がありません。管理画面から投稿してください。</p>";
                 return;
             }
 
-            // HTMLを一気に組み立ててから流し込む（高速化）
             let finalHtml = "";
             sortedGroups.forEach(g => {
                 const d = new Date(g.date);
@@ -194,7 +209,7 @@
             container.innerHTML = finalHtml;
 
         } catch (e) {
-            container.innerHTML = "<p>読込エラーです。Cloudinaryの設定（Resource list）を確認してください。</p>";
+            container.innerHTML = "<p>通信エラーが発生しました。ネットワークを確認してください。</p>";
         }
     }
 
@@ -230,7 +245,7 @@
                 loadImages(); 
             }, 2000);
         } catch (err) {
-            alert("アップロード中にエラーが起きました");
+            alert("アップロード中にエラーが起きました。プリセット名(ml_default)が正しいか確認してください。");
             btn.disabled = false;
         }
     }
