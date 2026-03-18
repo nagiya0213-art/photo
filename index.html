@@ -26,7 +26,7 @@
         <input type="password" id="pass-input" placeholder="合言葉を入力">
         <button onclick="checkPassword()">画像を見る</button>
         <div id="admin-login-area" style="margin-top:15px;">
-            <button onclick="loginDiscord()" style="background:#7289da;">管理者ログイン (Discord)</button>
+            <button onclick="loginDiscord()" id="login-btn" style="background:#7289da;">管理者ログイン (Discord)</button>
             <button onclick="logout()" id="logout-btn" style="background:#ff4757; display:none;">ログアウト</button>
         </div>
     </div>
@@ -60,7 +60,7 @@
         </select>
         <br>
         <input type="file" id="file-input" accept="image/*">
-        <button onclick="uploadImage()" style="background:#2ecc71;">この部活に投稿する</button>
+        <button onclick="uploadImage()" style="background:#2ecc71;">投稿する</button>
     </div>
 
     <h2 id="club-display">合言葉を入れてください</h2>
@@ -85,49 +85,55 @@
     let currentTag = "";
     let isAdmin = false;
 
-    // --- ✨ 新機能：LocalStorageへの保存と復元 ---
-
+    // --- ✨ 復元処理（最優先で実行） ---
     window.onload = () => {
-        // 1. URLにDiscordのトークンがあるかチェック
+        // 1. まずLocalStorageから「以前の状態」を読み出す
+        const savedAdmin = localStorage.getItem('isAdmin');
+        const savedTag = localStorage.getItem('currentTag');
+
+        // 2. URLにDiscordトークンがあるかチェック（ログイン直後）
         const params = new URLSearchParams(window.location.hash.slice(1));
         const token = params.get('access_token');
         
         if (token) {
-            localStorage.setItem('isAdmin', 'true'); // ログイン状態を保存
+            isAdmin = true;
+            localStorage.setItem('isAdmin', 'true');
+            // URLのトークンを消す
             history.replaceState(null, null, window.location.pathname);
+        } else if (savedAdmin === 'true') {
+            // トークンがなくても、保存データがあれば管理者として扱う
+            isAdmin = true;
         }
 
-        // 2. ログイン状態の復元
-        if (localStorage.getItem('isAdmin') === 'true') {
-            isAdmin = true;
+        // 3. 管理者ならパネルを表示
+        if (isAdmin) {
             document.getElementById('upload-panel').style.display = 'block';
-            document.getElementById('admin-login-area').querySelector('button').style.display = 'none';
+            document.getElementById('login-btn').style.display = 'none';
             document.getElementById('logout-btn').style.display = 'inline-block';
         }
 
-        // 3. 最後に見ていた部活の復元
-        const savedTag = localStorage.getItem('currentTag');
+        // 4. 部活の復元
         if (savedTag) {
             currentTag = savedTag;
             document.getElementById('club-display').innerText = currentTag + " のギャラリー";
-            // セレクトボックスの表示も合わせる
             const select = document.getElementById('admin-club-select');
             select.value = currentTag;
             loadImages();
         }
     };
 
+    // ログアウト（全リセット）
     function logout() {
-        localStorage.removeItem('isAdmin');
-        localStorage.removeItem('currentTag');
-        location.reload(); // ページをリロードして初期状態へ
+        localStorage.clear(); // 全ての保存データを消去
+        location.reload();
     }
 
+    // パスワード入力時
     function checkPassword() {
         const pass = document.getElementById('pass-input').value;
         if (clubData[pass]) {
             currentTag = clubData[pass];
-            localStorage.setItem('currentTag', currentTag); // 部活を保存
+            localStorage.setItem('currentTag', currentTag); // 保存
             document.getElementById('club-display').innerText = currentTag + " のギャラリー";
             loadImages();
         } else {
@@ -135,17 +141,18 @@
         }
     }
 
+    // 管理者リスト選択時
     function syncClub() {
         const select = document.getElementById('admin-club-select');
         if (select.value) {
             currentTag = select.value;
-            localStorage.setItem('currentTag', currentTag); // 選択した部活を保存
+            localStorage.setItem('currentTag', currentTag); // 保存
             document.getElementById('club-display').innerText = currentTag + " のギャラリー (管理者)";
             loadImages();
         }
     }
 
-    // --- 以下、既存の読み込み・アップロード・Discordログイン関数 ---
+    // 画像読み込み
     async function loadImages() {
         if (!currentTag) return;
         const gallery = document.getElementById('gallery');
@@ -166,15 +173,16 @@
                 gallery.appendChild(card);
             });
         } catch (e) {
-            gallery.innerHTML = "<p>画像の読み込みに失敗しました。</p>";
+            gallery.innerHTML = "<p>読み込みに失敗しました。</p>";
         }
     }
 
+    // アップロード
     async function uploadImage() {
-        if(!currentTag) return alert("先に部活を選択してください");
+        if(!currentTag) return alert("部活を選んでね");
         const fileInput = document.getElementById('file-input');
         const file = fileInput.files[0];
-        if(!file) return alert("画像を選んでください");
+        if(!file) return alert("画像を選んでね");
         const formData = new FormData();
         formData.append('file', file);
         formData.append('upload_preset', 'ml_default');
@@ -185,6 +193,7 @@
         } catch (e) { alert("エラーが発生しました。"); }
     }
 
+    // Discordログイン
     function loginDiscord() {
         const url = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(window.location.href.split('#')[0])}&response_type=token&scope=identify`;
         window.location.href = url;
