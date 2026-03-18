@@ -14,16 +14,17 @@
         button { cursor: pointer; transition: 0.3s; background: #5865F2; color: white; border: none; font-weight: bold; padding: 12px 20px; border-radius: 8px; margin: 5px; }
         .admin-panel { display: none; background: #eef2ff; padding: 20px; border-radius: 10px; border: 2px dashed #5865F2; margin: 20px 0; }
         
-        /* グループ表示のスタイル */
-        .post-group { background: #fff; margin-top: 20px; padding: 15px; border-radius: 12px; border: 1px solid #eee; text-align: left; }
+        /* グループ化表示のスタイル */
+        .post-group { background: #fff; margin-top: 20px; padding: 15px; border-radius: 12px; border: 1px solid #eee; text-align: left; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
         .post-date { font-size: 13px; color: #7f8c8d; font-weight: bold; display: block; border-bottom: 1px solid #f0f0f0; margin-bottom: 10px; padding-bottom: 5px; }
         .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
-        img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; cursor: pointer; background: #eee; transition: transform 0.2s; }
-        img:active { transform: scale(0.95); }
+        img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; cursor: pointer; background: #eee; transition: opacity 0.3s; }
+        img:hover { opacity: 0.8; }
         
         #status-msg { color: #5865F2; font-weight: bold; margin: 10px 0; font-size: 14px; }
-        .refresh-btn { background: #95a5a6; font-size: 13px; }
-        .error-box { background: #fff3f3; color: #d63031; padding: 15px; border-radius: 10px; border: 1px solid #ffcccc; margin: 10px 0; font-size: 13px; text-align: left; }
+        .refresh-btn { background: #95a5a6; font-size: 13px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -96,33 +97,17 @@
 
     let currentTag = "";
     let isAdmin = false;
+    let localImages = []; 
 
     window.onload = () => {
         const savedAdmin = localStorage.getItem('isAdmin');
         const savedTag = localStorage.getItem('currentTag');
-        const params = new URLSearchParams(window.location.hash.slice(1));
-        const token = params.get('access_token');
-        
-        if (token) {
-            isAdmin = true;
-            localStorage.setItem('isAdmin', 'true');
-            history.replaceState(null, null, window.location.pathname);
-        } else if (savedAdmin === 'true') {
-            isAdmin = true;
-        }
-
-        if (isAdmin) {
-            document.getElementById('upload-panel').style.display = 'block';
-            document.getElementById('login-btn').style.display = 'none';
-            document.getElementById('logout-btn').style.display = 'inline-block';
-        }
-
-        if (savedTag) {
-            currentTag = savedTag;
+        if (savedAdmin === 'true') { isAdmin = true; document.getElementById('upload-panel').style.display = 'block'; }
+        if (savedTag) { 
+            currentTag = savedTag; 
             document.getElementById('club-display').innerText = currentTag;
             document.getElementById('refresh-ui').style.display = 'inline-block';
-            document.getElementById('admin-club-select').value = currentTag;
-            loadImages();
+            loadImages(); 
         }
     };
 
@@ -134,7 +119,6 @@
             currentTag = clubData[pass];
             localStorage.setItem('currentTag', currentTag);
             document.getElementById('club-display').innerText = currentTag;
-            document.getElementById('admin-club-select').value = currentTag;
             document.getElementById('refresh-ui').style.display = 'inline-block';
             loadImages();
         } else { alert("合言葉が違います"); }
@@ -150,104 +134,80 @@
         }
     }
 
-    // ✨ 404エラー対策済みの画像取得処理
     async function loadImages() {
         if (!currentTag) return;
         const container = document.getElementById('gallery-container');
         container.innerHTML = "読込中...";
         
         try {
-            const listUrl = `https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentTag)}.json?cb=${Date.now()}`;
-            const res = await fetch(listUrl);
+            const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentTag)}.json?cb=${Date.now()}`);
+            let cloudResources = res.ok ? (await res.json()).resources : [];
             
-            if (!res.ok) {
-                // 404エラー（リスト機能オフ）の場合の専用メッセージ
-                container.innerHTML = `
-                    <div class="error-box">
-                        <strong>⚠️ 画像リストの取得に失敗しました (404)</strong><br>
-                        Cloudinaryの設定で「Resource list」が制限されている可能性があります。<br>
-                        <br>
-                        <small>解決策: Cloudinary管理画面 > Settings > Security > Restricted image types の「Resource list」のチェックを外して保存してください。</small>
-                    </div>`;
-                return;
-            }
-
-            const data = await res.json();
-            const groups = {};
-            
-            data.resources.forEach(img => {
-                if (img.format === 'json') return;
-                const gid = (img.tags || []).find(t => t.startsWith('group_')) || `s_${img.public_id}`;
-                if (!groups[gid]) groups[gid] = { images: [], date: img.created_at };
-                groups[gid].images.push(img);
-            });
-
-            const sortedGroups = Object.values(groups).sort((a, b) => new Date(b.date) - new Date(a.date));
-
-            if (sortedGroups.length === 0) {
-                container.innerHTML = "<p>まだ画像がありません。管理画面から投稿してください。</p>";
-                return;
-            }
-
-            let finalHtml = "";
-            sortedGroups.forEach(g => {
-                const d = new Date(g.date);
-                const dateStr = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
-                
-                const imagesHtml = g.images.map(img => {
-                    const url = `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/v${img.version}/${img.public_id}.${img.format}`;
-                    return `<img src="${url}" onclick="window.open('${url}', '_blank')">`;
-                }).join('');
-
-                finalHtml += `
-                    <div class="post-group">
-                        <span class="post-date">📅 ${dateStr} の投稿</span>
-                        <div class="gallery">${imagesHtml}</div>
-                    </div>
-                `;
-            });
-            container.innerHTML = finalHtml;
-
+            // サーバーデータと投稿直後のデータを結合
+            const allResources = [...localImages.filter(li => li.tag === currentTag), ...cloudResources];
+            renderGallery(allResources);
         } catch (e) {
-            container.innerHTML = "<p>通信エラーが発生しました。ネットワークを確認してください。</p>";
+            renderGallery(localImages.filter(li => li.tag === currentTag));
         }
     }
 
-    async function uploadImages() {
-        const fileInput = document.getElementById('file-input');
-        const files = fileInput.files;
-        const targetClub = document.getElementById('admin-club-select').value;
+    function renderGallery(resources) {
+        const container = document.getElementById('gallery-container');
+        if (resources.length === 0) { container.innerHTML = "<p>まだ画像がありません。</p>"; return; }
 
-        if(!targetClub || files.length === 0) return alert("部活と画像を選んでね");
+        const groups = {};
+        resources.forEach(img => {
+            const d = new Date(img.created_at);
+            const key = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(img);
+        });
+
+        const sortedKeys = Object.keys(groups).sort((a, b) => new Date(b) - new Date(a));
+
+        let html = "";
+        sortedKeys.forEach(date => {
+            html += `<div class="post-group"><span class="post-date">📅 ${date} の投稿</span><div class="gallery">`;
+            groups[date].forEach(img => {
+                const url = `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/v${img.version}/${img.public_id}.${img.format}`;
+                html += `<img src="${url}" onclick="window.open('${url}', '_blank')">`;
+            });
+            html += `</div></div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    async function uploadImages() {
+        const files = document.getElementById('file-input').files;
+        if(!currentTag || files.length === 0) return alert("画像を選んでね");
 
         const status = document.getElementById('status-msg');
-        const btn = document.getElementById('upload-btn');
-        btn.disabled = true;
-        status.style.display = "block";
+        status.innerText = "送信中...";
         
-        const groupId = `group_${Date.now()}`;
-        
-        try {
-            for (let i = 0; i < files.length; i++) {
-                status.innerText = `${i + 1}/${files.length}枚目を送信中...`;
-                const formData = new FormData();
-                formData.append('file', files[i]);
-                formData.append('upload_preset', 'ml_default');
-                formData.append('tags', `${targetClub},${groupId}`);
+        for (let i = 0; i < files.length; i++) {
+            status.innerText = `${i+1}/${files.length}枚目を送信中...`;
+            const formData = new FormData();
+            formData.append('file', files[i]);
+            formData.append('upload_preset', 'ml_default');
+            formData.append('tags', currentTag);
 
-                await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
-            }
-            status.innerText = "完了！反映中...";
-            fileInput.value = "";
-            setTimeout(() => { 
-                status.style.display = "none"; 
-                btn.disabled = false;
-                loadImages(); 
-            }, 2000);
-        } catch (err) {
-            alert("アップロード中にエラーが起きました。プリセット名(ml_default)が正しいか確認してください。");
-            btn.disabled = false;
+            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
+            const data = await res.json();
+            
+            // 投稿に成功した画像データをメモリに保持（即時反映用）
+            localImages.unshift({
+                public_id: data.public_id,
+                version: data.version,
+                format: data.format,
+                created_at: new Date().toISOString(),
+                tag: currentTag
+            });
+            
+            // リスト取得を待たずに再描画
+            renderGallery([...localImages.filter(li => li.tag === currentTag)]);
         }
+        status.innerText = "完了！";
+        setTimeout(() => { status.innerText = ""; }, 3000);
     }
 
     function loginDiscord() {
@@ -255,6 +215,5 @@
         window.location.href = url;
     }
 </script>
-
 </body>
 </html>
