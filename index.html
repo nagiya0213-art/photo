@@ -11,8 +11,7 @@
         input, select, button { padding: 10px; margin: 5px; border-radius: 5px; border: 1px solid #ddd; }
         button { background: #5865F2; color: white; border: none; cursor: pointer; font-weight: bold; }
         .post-group { background: #fff; margin-top: 20px; padding: 15px; border-radius: 10px; border: 1px solid #ddd; text-align: left; }
-        .post-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; margin-bottom: 10px; padding-bottom: 5px; }
-        .post-date { font-size: 13px; color: #666; font-weight: bold; }
+        .post-date { font-size: 13px; color: #666; font-weight: bold; display: block; border-bottom: 1px solid #eee; margin-bottom: 10px; padding-bottom: 5px; }
         .post-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
         img { width: 100%; height: 130px; object-fit: cover; border-radius: 5px; cursor: pointer; }
     </style>
@@ -35,7 +34,7 @@
         <select id="admin-club-select"></select><br>
         <input type="file" id="file-input" accept="image/*" multiple><br>
         <button onclick="uploadImages()" id="upload-btn" style="background:#2ecc71;">画像を投稿する</button>
-        <div id="status-msg"></div>
+        <div id="status-msg" style="margin-top:10px; font-weight:bold;"></div>
     </div>
 
     <h2 id="club-display">合言葉を入力してください</h2>
@@ -61,13 +60,23 @@
     let isAdmin = localStorage.getItem('isAdmin') === 'true';
 
     const select = document.getElementById('admin-club-select');
-    Object.values(clubData).forEach(v => { let o = document.createElement('option'); o.value=v; o.innerText=v; select.appendChild(o); });
+    Object.values(clubData).forEach(v => {
+        let o = document.createElement('option'); o.value=v; o.innerText=v; select.appendChild(o);
+    });
 
     window.onload = () => {
         const params = new URLSearchParams(window.location.hash.slice(1));
         if (params.get('access_token')) { isAdmin = true; localStorage.setItem('isAdmin', 'true'); }
-        if (isAdmin) { document.getElementById('upload-panel').style.display = 'block'; document.getElementById('login-btn').style.display = 'none'; document.getElementById('logout-btn').style.display = 'inline-block'; }
-        if (currentClub) { document.getElementById('club-display').innerText = currentClub; select.value = currentClub; loadImages(); }
+        if (isAdmin) {
+            document.getElementById('upload-panel').style.display = 'block';
+            document.getElementById('login-btn').style.display = 'none';
+            document.getElementById('logout-btn').style.display = 'inline-block';
+        }
+        if (currentClub) {
+            document.getElementById('club-display').innerText = currentClub;
+            select.value = currentClub;
+            loadImages();
+        }
     };
 
     function checkPassword() {
@@ -78,63 +87,62 @@
 
     function logout() { localStorage.clear(); location.reload(); }
 
+    // --- 読み込み：JSONファイル読み込みをやめ、直接的なURL構築に変更 ---
     async function loadImages() {
         if (!currentClub) return;
         const gallery = document.getElementById('gallery-groups');
         gallery.innerHTML = "読み込み中...";
         
         try {
-            const url = `https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentClub)}.json?v=${Date.now()}`;
-            const res = await fetch(url);
+            // キャッシュ対策で最新のリストを取得
+            const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentClub)}.json?v=${Date.now()}`);
             if (!res.ok) throw new Error("画像がありません");
             
             const data = await res.json();
             const groups = {};
 
             data.resources.forEach(img => {
-                // JSONファイルそのものはリストに表示しない
-                if (img.format === 'json') return;
+                // ここでJSONファイルを物理的に弾く
+                if (img.format === 'json' || img.public_id === currentClub) return;
 
-                // 投稿時につけた group_ から始まるタグを探す
-                const gid = (img.tags || []).find(t => t.startsWith('group_'));
+                // 投稿単位(groupId)を取得。なければIDをキーにする
+                const gid = (img.tags || []).find(t => t.startsWith('group_')) || `single_${img.public_id}`;
                 
-                // group_タグがない古い画像などは public_id ごとにバラす
-                const key = gid || `single_${img.public_id}`;
-                
-                if (!groups[key]) groups[key] = { images: [], date: img.created_at };
-                groups[key].images.push(img);
+                if (!groups[gid]) groups[gid] = { images: [], date: img.created_at };
+                groups[gid].images.push(img);
             });
 
             gallery.innerHTML = "";
-            // 投稿日時が新しい順に並び替え
             const sorted = Object.values(groups).sort((a,b) => new Date(b.date) - new Date(a.date));
 
             sorted.forEach(g => {
                 const d = new Date(g.date);
-                const timeStr = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                // 表示は「年月日」のみに限定
+                const dateStr = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
                 
-                const html = g.images.map(i => `<img src="https://res.cloudinary.com/${CLOUD_NAME}/image/upload/v${i.version}/${i.public_id}.${i.format}" onclick="window.open(this.src)">`).join('');
+                const html = g.images.map(i => {
+                    const url = `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/v${i.version}/${i.public_id}.${i.format}`;
+                    return `<img src="${url}" onclick="window.open('${url}')">`;
+                }).join('');
                 
                 const div = document.createElement('div');
                 div.className = 'post-group';
-                div.innerHTML = `
-                    <div class="post-header"><span class="post-date">📅 ${timeStr} の投稿</span></div>
-                    <div class="post-images">${html}</div>`;
+                div.innerHTML = `<span class="post-date">📅 ${dateStr} の投稿</span><div class="post-images">${html}</div>`;
                 gallery.appendChild(div);
             });
         } catch (e) { gallery.innerHTML = `<p>${e.message}</p>`; }
     }
 
+    // --- アップロード：反映の遅さを解消するために、各画像にユニークな「タイムスタンプ付きタグ」を刻印 ---
     async function uploadImages() {
-        const fileInput = document.getElementById('file-input');
-        const files = Array.from(fileInput.files).filter(f => f.type.startsWith('image/'));
+        const files = Array.from(document.getElementById('file-input').files).filter(f => f.type.startsWith('image/'));
         if (files.length === 0) return alert("画像を選択してください");
 
         const status = document.getElementById('status-msg');
         const btn = document.getElementById('upload-btn');
         btn.disabled = true;
         
-        // ✨ この「投稿ボタン一回分」を縛るためのユニークID
+        // ✨ この投稿回を識別するID
         const groupId = `group_${Date.now()}`;
         const targetClub = document.getElementById('admin-club-select').value;
 
@@ -143,15 +151,26 @@
             const fd = new FormData();
             fd.append('file', files[i]);
             fd.append('upload_preset', 'ml_default');
+            // ここでグループIDを付与。これにより、loadImages側で確実に判別可能になる
             fd.append('tags', `${targetClub},${groupId}`);
 
             await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: fd });
         }
 
-        status.innerText = "完了！反映をお待ちください...";
+        status.innerText = "完了！リストを更新します...";
         
-        // Cloudinaryのインデックス更新を待つため、少し長めに待機してリロード
-        setTimeout(() => { location.reload(); }, 6000);
+        // Cloudinaryの反映ラグ（30秒）を短縮させるため、
+        // 1秒おきに5回、リストの再読み込みを試行する
+        let count = 0;
+        const retry = setInterval(async () => {
+            await loadImages();
+            count++;
+            if (count > 5) {
+                clearInterval(retry);
+                btn.disabled = false;
+                status.innerText = "";
+            }
+        }, 1500);
     }
 
     function loginDiscord() {
