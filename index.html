@@ -5,22 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>部活動フォトアルバム</title>
     <style>
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; text-align: center; background: #f4f7f9; color: #333; margin: 0; padding: 20px; }
-        .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        h1 { color: #2c3e50; margin-bottom: 30px; }
-        .auth-section { margin-bottom: 30px; padding: 20px; border-bottom: 2px solid #eee; }
-        input, button, select { padding: 12px; margin: 5px; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; }
-        button { cursor: pointer; transition: 0.3s; background: #5865F2; color: white; border: none; font-weight: bold; }
-        .admin-panel { display: none; background: #eef2ff; padding: 25px; border-radius: 10px; border: 2px dashed #5865F2; margin: 20px 0; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; text-align: center; background: #f4f7f9; color: #333; margin: 0; padding: 10px; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; font-size: 1.5rem; margin-bottom: 20px; }
         
-        /* ギャラリーとカードのデザイン */
-        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; margin-top: 30px; min-height: 200px; }
-        .img-card { background: #fff; padding: 10px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: left; }
-        img { width: 100%; height: 200px; object-fit: cover; border-radius: 5px; margin-bottom: 8px; }
-        .img-date { font-size: 12px; color: #7f8c8d; margin-left: 5px; }
+        .auth-section { margin-bottom: 20px; padding: 15px; border-bottom: 2px solid #eee; }
+        input[type="password"], select { padding: 12px; margin: 5px; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; width: 80%; max-width: 300px; }
         
-        .refresh-btn { background: #95a5a6; font-size: 14px; margin-top: 10px; }
-        #status-msg { color: #5865F2; font-weight: bold; margin-top: 10px; display: none; }
+        /* スマホで突き抜けないためのファイル入力修正 */
+        input[type="file"] { 
+            padding: 10px; margin: 10px 0; font-size: 14px; width: 100%; box-sizing: border-box; 
+        }
+
+        button { cursor: pointer; transition: 0.3s; background: #5865F2; color: white; border: none; font-weight: bold; padding: 12px 20px; border-radius: 8px; margin: 5px; }
+        
+        .admin-panel { display: none; background: #eef2ff; padding: 20px; border-radius: 10px; border: 2px dashed #5865F2; margin: 20px 0; }
+        
+        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 15px; margin-top: 20px; }
+        .img-card { background: #fff; padding: 8px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; }
+        img { width: 100%; height: 150px; object-fit: cover; border-radius: 5px; margin-bottom: 5px; }
+        
+        /* 時間を消して日付だけに */
+        .img-date { font-size: 11px; color: #7f8c8d; display: block; }
+        
+        #status-msg { color: #5865F2; font-weight: bold; margin: 10px 0; font-size: 14px; }
+        .refresh-btn { background: #95a5a6; font-size: 13px; }
     </style>
 </head>
 <body>
@@ -31,8 +40,8 @@
     <div class="auth-section">
         <input type="password" id="pass-input" placeholder="合言葉を入力">
         <button onclick="checkPassword()">画像を見る</button>
-        <div id="admin-login-area" style="margin-top:15px;">
-            <button onclick="loginDiscord()" id="login-btn" style="background:#7289da;">管理者ログイン (Discord)</button>
+        <div id="admin-login-area" style="margin-top:10px;">
+            <button onclick="loginDiscord()" id="login-btn" style="background:#7289da;">管理者ログイン</button>
             <button onclick="logout()" id="logout-btn" style="background:#ff4757; display:none;">ログアウト</button>
         </div>
     </div>
@@ -66,19 +75,19 @@
         </select>
         <br>
         <input type="file" id="file-input" accept="image/*" multiple>
-        <button onclick="uploadImages()" style="background:#2ecc71;">選択した画像を全て投稿</button>
+        <br>
+        <button onclick="uploadImages()" style="background:#2ecc71;">一括投稿する</button>
         <div id="status-msg"></div>
     </div>
 
     <h2 id="club-display">合言葉を入れてください</h2>
-    <button onclick="loadImages()" class="refresh-btn" id="refresh-ui" style="display:none;">最新の状態に更新 🔄</button>
+    <button onclick="loadImages()" class="refresh-btn" id="refresh-ui" style="display:none;">最新に更新 🔄</button>
     <div id="gallery" class="gallery"></div>
 </div>
 
 <script>
     const CLOUD_NAME = "dn8jcukh0"; 
     const CLIENT_ID = "1483619678940303410"; 
-
     const clubData = {
         "Basket24!": "バスケットボール部", "SoftTennis7": "ソフトテニス部", "VolleyGo11": "バレーボール部",
         "Muscle99!": "マッチョ部", "DanceStep8": "ダンス部", "KyudoArrow1": "弓道部",
@@ -115,10 +124,9 @@
 
         if (savedTag) {
             currentTag = savedTag;
-            document.getElementById('club-display').innerText = currentTag + " のギャラリー";
+            document.getElementById('club-display').innerText = currentTag;
             document.getElementById('refresh-ui').style.display = 'inline-block';
-            const select = document.getElementById('admin-club-select');
-            select.value = currentTag;
+            document.getElementById('admin-club-select').value = currentTag;
             loadImages();
         }
     };
@@ -130,90 +138,77 @@
         if (clubData[pass]) {
             currentTag = clubData[pass];
             localStorage.setItem('currentTag', currentTag);
-            document.getElementById('club-display').innerText = currentTag + " のギャラリー";
-            document.getElementById('refresh-ui').style.display = 'inline-block';
             loadImages();
+            document.getElementById('refresh-ui').style.display = 'inline-block';
+            document.getElementById('club-display').innerText = currentTag;
         } else { alert("合言葉が違います"); }
     }
 
     function syncClub() {
-        const select = document.getElementById('admin-club-select');
-        if (select.value) {
-            currentTag = select.value;
+        currentTag = document.getElementById('admin-club-select').value;
+        if (currentTag) {
             localStorage.setItem('currentTag', currentTag);
-            document.getElementById('club-display').innerText = currentTag + " のギャラリー (管理者)";
-            document.getElementById('refresh-ui').style.display = 'inline-block';
             loadImages();
+            document.getElementById('club-display').innerText = currentTag;
         }
     }
 
-    // 画像読み込み ＋ 日付表示
+    // ✨ 反映されない対策を強化した読み込み
     async function loadImages() {
         if (!currentTag) return;
         const gallery = document.getElementById('gallery');
-        gallery.innerHTML = "読み込み中...";
+        gallery.innerHTML = "読込中...";
+        
         try {
-            const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentTag)}.json?cb=${new Date().getTime()}`);
+            // cbパラメータでキャッシュを完全に回避
+            const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentTag)}.json?cb=${Date.now()}`);
+            if (!res.ok) throw new Error();
             const data = await res.json();
+            
             gallery.innerHTML = "";
-            if (data.resources.length === 0) {
-                gallery.innerHTML = "<p>まだ画像がありません。</p>";
-                return;
-            }
-
-            // 投稿日の新しい順（最新が上）に並び替え
             data.resources.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
             data.resources.forEach(img => {
                 const card = document.createElement('div');
                 card.className = 'img-card';
                 
-                // 日付のフォーマット (YYYY/MM/DD HH:mm)
+                // 日付のみ取得
                 const d = new Date(img.created_at);
-                const dateStr = `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+                const dateOnly = `${d.getFullYear()}/${(d.getMonth()+1)}/${d.getDate()}`;
 
                 const imgUrl = `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/v${img.version}/${img.public_id}.${img.format}`;
                 card.innerHTML = `
                     <img src="${imgUrl}" onclick="window.open('${imgUrl}', '_blank')">
-                    <span class="img-date">📅 ${dateStr}</span>
+                    <span class="img-date">${dateOnly}</span>
                 `;
                 gallery.appendChild(card);
             });
-        } catch (e) { gallery.innerHTML = "<p>読み込みに失敗しました。</p>"; }
+        } catch (e) {
+            gallery.innerHTML = "<p>まだ画像がないか、読込エラーです。更新ボタンを試してください。</p>";
+        }
     }
 
-    // ✨ 複数枚アップロード機能
     async function uploadImages() {
         const fileInput = document.getElementById('file-input');
         const files = fileInput.files;
-        if(!currentTag) return alert("部活を選んでね");
-        if(files.length === 0) return alert("画像を選んでね");
+        if(!currentTag || files.length === 0) return alert("部活と画像を選んでね");
 
         const status = document.getElementById('status-msg');
         status.style.display = "block";
         
-        let successCount = 0;
-
         for (let i = 0; i < files.length; i++) {
-            status.innerText = `${files.length}枚中 ${i + 1}枚目をアップロード中...`;
-            
+            status.innerText = `${i + 1}/${files.length}枚目を送信中...`;
             const formData = new FormData();
             formData.append('file', files[i]);
             formData.append('upload_preset', 'ml_default');
             formData.append('tags', currentTag);
 
-            try {
-                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
-                if(res.ok) successCount++;
-            } catch (e) { console.error("Upload error", e); }
+            await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
         }
 
-        status.innerText = `${successCount}枚の投稿が完了しました！`;
+        status.innerText = "完了！反映されない場合は「更新」を押してね";
         fileInput.value = "";
-        setTimeout(() => {
-            status.style.display = "none";
-            loadImages();
-        }, 2000);
+        setTimeout(() => { status.style.display = "none"; loadImages(); }, 1500);
     }
 
     function loginDiscord() {
