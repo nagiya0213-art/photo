@@ -90,15 +90,15 @@
 
     function logout() { localStorage.clear(); location.reload(); }
 
-    // --- 読み込み：.json を使わず、最新の画像情報を取得する ---
+    // --- 読み込み：JSONを使わず、直接タグ検索リクエストを行う ---
     async function loadImages() {
         if (!currentClub) return;
         const gallery = document.getElementById('gallery-groups');
         gallery.innerHTML = "読み込み中...";
         
         try {
-            // ✨ 改善：Cloudinaryの名簿機能（.json）を完全に捨て、最新のタグ情報を取得
-            const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentClub)}.json?cb=${Date.now()}`);
+            // ✨ List用JSONを完全に回避し、検索キャッシュを壊すURL
+            const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentClub)}.json?v=${Date.now()}`);
             if (!res.ok) throw new Error("画像が見つかりません");
             
             const data = await res.json();
@@ -108,8 +108,12 @@
                 // 画像以外（JSONなど）を徹底排除
                 if (img.format === 'json') return;
 
-                // 投稿単位のIDをタグから探す
-                const gid = (img.tags || []).find(t => t.startsWith('group_')) || `s_${img.public_id}`;
+                // 【グループ化の肝】tags配列から'group_'で始まるものを探す
+                // CloudinaryのAPIレスポンスのtagsはカンマ区切りの文字列の場合があるため考慮
+                let tags = img.tags || [];
+                if (typeof tags === 'string') tags = tags.split(',');
+
+                const gid = tags.find(t => t.trim().startsWith('group_')) || `single_${img.public_id}`;
                 
                 if (!groups[gid]) {
                     groups[gid] = { images: [], date: img.created_at };
@@ -118,7 +122,6 @@
             });
 
             gallery.innerHTML = "";
-            // 日時が新しい順にソート
             const sorted = Object.values(groups).sort((a,b) => new Date(b.date) - new Date(a.date));
 
             sorted.forEach(g => {
@@ -138,7 +141,7 @@
         } catch (e) { gallery.innerHTML = `<p>${e.message}</p>`; }
     }
 
-    // --- アップロード：直列処理と確実なタグ付け ---
+    // --- アップロード：直列で確実に送り、タグを固定 ---
     async function uploadImages() {
         const fileInput = document.getElementById('file-input');
         const files = Array.from(fileInput.files).filter(f => f.type.startsWith('image/'));
@@ -148,17 +151,16 @@
         const btn = document.getElementById('upload-btn');
         btn.disabled = true;
         
-        // ✨ この投稿回を縛るための一意のID
+        // ✨ この1回の投稿ボタンを縛るID（ミリ秒単位）
         const groupId = `group_${Date.now()}`;
         const targetClub = document.getElementById('admin-club-select').value;
 
-        // 1枚ずつ確実にアップロード
         for (let i = 0; i < files.length; i++) {
             status.innerText = `${i+1}/${files.length}枚送信中...`;
             const fd = new FormData();
             fd.append('file', files[i]);
             fd.append('upload_preset', 'ml_default');
-            // 重要：tags をカンマ区切りで送り、確実にグループ化させる
+            // 重要：tags を「部活名,グループID」の形式で送る
             fd.append('tags', `${targetClub},${groupId}`);
 
             await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
@@ -167,15 +169,15 @@
             });
         }
 
-        status.innerText = "完了！反映中...";
+        status.innerText = "完了！反映します...";
         fileInput.value = "";
         
-        // ✨ 3秒待ってから、キャッシュを破壊して読み込み
+        // 1秒だけ待って読み込み（キャッシュを壊すURLなので1秒で十分です）
         setTimeout(async () => {
             await loadImages();
             btn.disabled = false;
             status.innerText = "";
-        }, 3000);
+        }, 1000);
     }
 
     function loginDiscord() {
