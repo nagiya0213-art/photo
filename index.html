@@ -3,28 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>部活動フォトアルバム</title>
+    <title>放送広報フォトアルバム</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f4f7f9; margin: 0; padding: 10px; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 15px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); box-sizing: border-box; }
+        /* レイアウト修正：突き出し防止とモバイル最適化 */
+        body { font-family: sans-serif; text-align: center; background: #f4f7f9; margin: 0; padding: 10px; box-sizing: border-box; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 15px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 100%; box-sizing: border-box; }
         .auth-section, .admin-panel { margin-bottom: 20px; padding: 15px; border-bottom: 1px solid #eee; }
-        input[type="password"], select { width: 100%; max-width: 300px; padding: 12px; margin: 5px 0; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; }
-        input[type="file"] { width: 100%; max-width: 300px; padding: 10px; background: #eee; border-radius: 8px; box-sizing: border-box; }
-        button { padding: 12px 24px; margin: 5px; border-radius: 8px; border: none; background: #5865F2; color: white; font-weight: bold; cursor: pointer; }
+        
+        /* 入力フォームの幅調整 */
+        input[type="password"], select, input[type="file"] { 
+            width: 100%; max-width: 100%; padding: 12px; margin: 5px 0; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; font-size: 16px;
+        }
+        
+        button { padding: 12px 24px; margin: 5px; border-radius: 8px; border: none; background: #5865F2; color: white; font-weight: bold; cursor: pointer; width: auto; }
         .admin-panel { background: #f0f4ff; border: 2px dashed #5865F2; border-radius: 10px; display: none; }
+        
+        /* グループ化の見た目 */
         .post-group { background: #fff; margin-top: 20px; padding: 15px; border-radius: 12px; border: 1px solid #eee; text-align: left; }
         .post-date { font-size: 13px; color: #7f8c8d; font-weight: bold; display: block; border-bottom: 1px solid #f0f0f0; margin-bottom: 10px; padding-bottom: 5px; }
-        .post-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
-        img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; cursor: pointer; background: #f9f9f9; }
+        .post-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
+        img { width: 100%; height: 100px; object-fit: cover; border-radius: 6px; cursor: pointer; background: #f9f9f9; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🏫 部活動フォトアルバム</h1>
+    <h1>🎙 放送広報フォトアルバム</h1>
 
     <div class="auth-section">
-        <input type="password" id="pass-input" placeholder="合言葉">
+        <input type="password" id="pass-input" placeholder="合гово言">
         <button onclick="checkPassword()">画像を見る</button>
         <div style="margin-top:10px;">
             <button onclick="loginDiscord()" id="login-btn">管理者ログイン</button>
@@ -90,30 +97,25 @@
 
     function logout() { localStorage.clear(); location.reload(); }
 
-    // --- 読み込み：JSONを使わず、直接タグ検索リクエストを行う ---
+    // --- 【超重要】JSON名簿を使わず、最新データを直接取得する ---
     async function loadImages() {
         if (!currentClub) return;
         const gallery = document.getElementById('gallery-groups');
         gallery.innerHTML = "読み込み中...";
         
         try {
-            // ✨ List用JSONを完全に回避し、検索キャッシュを壊すURL
+            // ✨ List API (.json) ではなく、最新のメタデータを取得
             const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentClub)}.json?v=${Date.now()}`);
-            if (!res.ok) throw new Error("画像が見つかりません");
+            if (!res.ok) throw new Error("画像がありません");
             
             const data = await res.json();
             const groups = {};
 
             data.resources.forEach(img => {
-                // 画像以外（JSONなど）を徹底排除
                 if (img.format === 'json') return;
 
-                // 【グループ化の肝】tags配列から'group_'で始まるものを探す
-                // CloudinaryのAPIレスポンスのtagsはカンマ区切りの文字列の場合があるため考慮
-                let tags = img.tags || [];
-                if (typeof tags === 'string') tags = tags.split(',');
-
-                const gid = tags.find(t => t.trim().startsWith('group_')) || `single_${img.public_id}`;
+                // 投稿単位のグループタグ(group_...)を特定
+                const gid = (img.tags || []).find(t => t.startsWith('group_')) || `single_${img.public_id}`;
                 
                 if (!groups[gid]) {
                     groups[gid] = { images: [], date: img.created_at };
@@ -127,7 +129,6 @@
             sorted.forEach(g => {
                 const d = new Date(g.date);
                 const dateStr = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
-                
                 const html = g.images.map(i => {
                     const url = `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/v${i.version}/${i.public_id}.${i.format}`;
                     return `<img src="${url}" onclick="window.open('${url}')">`;
@@ -141,7 +142,6 @@
         } catch (e) { gallery.innerHTML = `<p>${e.message}</p>`; }
     }
 
-    // --- アップロード：直列で確実に送り、タグを固定 ---
     async function uploadImages() {
         const fileInput = document.getElementById('file-input');
         const files = Array.from(fileInput.files).filter(f => f.type.startsWith('image/'));
@@ -151,7 +151,6 @@
         const btn = document.getElementById('upload-btn');
         btn.disabled = true;
         
-        // ✨ この1回の投稿ボタンを縛るID（ミリ秒単位）
         const groupId = `group_${Date.now()}`;
         const targetClub = document.getElementById('admin-club-select').value;
 
@@ -160,24 +159,21 @@
             const fd = new FormData();
             fd.append('file', files[i]);
             fd.append('upload_preset', 'ml_default');
-            // 重要：tags を「部活名,グループID」の形式で送る
+            // 【重要】tagsは必ず「部活名,グループID」の順
             fd.append('tags', `${targetClub},${groupId}`);
 
-            await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
-                method: 'POST',
-                body: fd
-            });
+            await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: fd });
         }
 
-        status.innerText = "完了！反映します...";
+        status.innerText = "完了！反映中...";
         fileInput.value = "";
         
-        // 1秒だけ待って読み込み（キャッシュを壊すURLなので1秒で十分です）
-        setTimeout(async () => {
-            await loadImages();
+        // 即座に反映させるための待機
+        setTimeout(() => {
+            loadImages();
             btn.disabled = false;
             status.innerText = "";
-        }, 1000);
+        }, 1500);
     }
 
     function loginDiscord() {
