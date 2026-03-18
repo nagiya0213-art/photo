@@ -14,7 +14,6 @@
         .post-date { font-size: 12px; color: #666; font-weight: bold; display: block; border-bottom: 1px solid #eee; margin-bottom: 10px; }
         .post-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
         img { width: 100%; height: 120px; object-fit: cover; border-radius: 5px; cursor: pointer; }
-        #status-msg { color: #5865F2; font-weight: bold; margin: 10px; }
     </style>
 </head>
 <body>
@@ -60,7 +59,6 @@
     let currentClub = localStorage.getItem('currentClub') || "";
     let isAdmin = localStorage.getItem('isAdmin') === 'true';
 
-    // セレクトボックス作成
     const select = document.getElementById('admin-club-select');
     Object.values(clubData).forEach(v => { let o = document.createElement('option'); o.value=v; o.innerText=v; select.appendChild(o); });
 
@@ -79,27 +77,38 @@
 
     function logout() { localStorage.clear(); location.reload(); }
 
-    // --- 読み込み処理（絶対にここからアップロードを呼び出さない） ---
+    // --- 読み込み：JSONファイルではなく、タグ検索URLを直接叩く ---
     async function loadImages() {
         if (!currentClub) return;
         const gallery = document.getElementById('gallery-groups');
-        gallery.innerHTML = "読み込み中...";
+        gallery.innerHTML = "読込中...";
         
         try {
-            const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentClub)}.json?v=${Date.now()}`);
-            if (!res.ok) throw new Error("画像がありません");
-            const data = await res.json();
+            // ✨ List用JSONではなく、検索結果を直接取得するURLスキーム
+            const url = `https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentClub)}.json?v=${Date.now()}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("画像がありません。投稿してみるハム！");
             
+            const data = await res.json();
             const groups = {};
+
             data.resources.forEach(img => {
-                if (img.format === 'json') return; // JSONは無視
-                const gid = (img.tags || []).find(t => t.startsWith('group_')) || `s_${img.public_id}`;
+                // ファイル名や形式でJSONを完全に除外
+                if (img.format === 'json' || img.public_id === currentClub) return;
+
+                // Cloudinaryのtags配列からgroup_を探す（存在しない場合は作成日で暫定グループ化）
+                const gid = (img.tags || []).find(t => t.startsWith('group_')) || `date_${img.created_at.split('T')[0]}`;
+                
                 if (!groups[gid]) groups[gid] = { images: [], date: img.created_at };
                 groups[gid].images.push(img);
             });
 
             gallery.innerHTML = "";
-            Object.values(groups).sort((a,b) => new Date(b.date) - new Date(a.date)).forEach(g => {
+            const sorted = Object.values(groups).sort((a,b) => new Date(b.date) - new Date(a.date));
+
+            if (sorted.length === 0) throw new Error("画像がありません");
+
+            sorted.forEach(g => {
                 const d = new Date(g.date);
                 const html = g.images.map(i => `<img src="https://res.cloudinary.com/${CLOUD_NAME}/image/upload/v${i.version}/${i.public_id}.${i.format}" onclick="window.open(this.src)">`).join('');
                 const div = document.createElement('div');
@@ -107,33 +116,36 @@
                 div.innerHTML = `<span class="post-date">📅 ${d.toLocaleDateString()} の投稿</span><div class="post-images">${html}</div>`;
                 gallery.appendChild(div);
             });
-        } catch (e) { gallery.innerHTML = e.message; }
+        } catch (e) { gallery.innerHTML = `<p>${e.message}</p>`; }
     }
 
-    // --- アップロード処理 ---
     async function uploadImages() {
         const files = Array.from(document.getElementById('file-input').files).filter(f => f.type.startsWith('image/'));
-        if (files.length === 0) return alert("画像を選んで！");
+        if (files.length === 0) return alert("画像を選んでね！");
 
         const status = document.getElementById('status-msg');
         const btn = document.getElementById('upload-btn');
         btn.disabled = true;
-        status.innerText = "送信中...";
+        status.innerText = "一生懸命送ってるハム...";
         
         const gid = `group_${Date.now()}`;
         const targetClub = document.getElementById('admin-club-select').value;
 
+        // すべてのアップロードを並列ではなく直列で確実にこなす
         for (const file of files) {
             const fd = new FormData();
             fd.append('file', file);
             fd.append('upload_preset', 'ml_default');
-            fd.append('tags', `${targetClub},${gid}`); // ここでタグを付ける
+            // ✨ 確実にタグを付与
+            fd.append('tags', `${targetClub},${gid}`);
 
             await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: fd });
         }
 
-        status.innerText = "完了！3秒後に自動更新します";
-        setTimeout(() => { location.reload(); }, 3000); // リロードして確実に最新を取得
+        status.innerText = "終わったハム！反映を待つハム...";
+        
+        // 5秒待ってからリロード（Cloudinaryの反映待ち）
+        setTimeout(() => { location.reload(); }, 5000);
     }
 
     function loginDiscord() {
