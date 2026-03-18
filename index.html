@@ -33,6 +33,7 @@
 
     <div id="upload-panel" class="admin-panel">
         <h3>🛠 管理者メニュー</h3>
+        <p style="font-size: 14px; color: #666;">投稿先の部活を選択してください：</p>
         <select id="admin-club-select"></select><br>
         <input type="file" id="file-input" accept="image/*" multiple><br>
         <button onclick="uploadImages()" id="upload-btn" style="background:#2ecc71;">投稿する</button>
@@ -45,7 +46,7 @@
 
 <script>
     const CLOUD_NAME = "dn8jcukh0";
-    const CLIENT_ID = "1483619678940303410"; // ここに作成したDiscordのClientIDを入れてください
+    const CLIENT_ID = "1483619678940303410"; // あなたのDiscord ClientIDを入れてください
 
     const clubData = {
         "Basket24!": "バスケットボール部", "SoftTennis7": "ソフトテニス部", "VolleyGo11": "バレーボール部",
@@ -61,18 +62,18 @@
     let currentClub = localStorage.getItem('currentClub') || "";
     let isAdmin = localStorage.getItem('isAdmin') === 'true';
 
-    const select = document.getElementById('admin-club-select');
+    // セレクトボックスの初期化（すべての部活を選択可能に）
+    const adminSelect = document.getElementById('admin-club-select');
     Object.values(clubData).forEach(v => {
-        let o = document.createElement('option'); o.value=v; o.innerText=v; select.appendChild(o);
+        let o = document.createElement('option'); o.value=v; o.innerText=v; adminSelect.appendChild(o);
     });
 
     window.onload = () => {
-        // URLのハッシュ（#access_token=...）をチェックしてログイン判定
+        // Discord認証後のハッシュ処理
         const params = new URLSearchParams(window.location.hash.slice(1));
         if (params.get('access_token')) {
             isAdmin = true;
             localStorage.setItem('isAdmin', 'true');
-            // URLをきれいにする
             history.replaceState(null, null, window.location.pathname);
         }
 
@@ -84,7 +85,8 @@
 
         if (currentClub) {
             document.getElementById('club-display').innerText = currentClub;
-            document.getElementById('admin-club-select').value = currentClub;
+            // 管理者の初期選択も、今見ている部活に合わせておく（親切設計）
+            adminSelect.value = currentClub;
             loadImages();
         }
     };
@@ -110,12 +112,14 @@
         location.reload();
     }
 
+    // 表示処理
     async function loadImages() {
         if (!currentClub) return;
         const gallery = document.getElementById('gallery-groups');
-        gallery.innerHTML = "読み込み中...";
+        gallery.innerHTML = "最新の画像を読み込み中...";
         
         try {
+            // currentClub (合言葉で選んだ部) のタグを持つ画像リストを取得
             const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentClub)}.json?v=${Date.now()}`);
             if (!res.ok) throw new Error("画像がありません");
             
@@ -124,6 +128,7 @@
 
             data.resources.forEach(img => {
                 if (img.format === 'json') return;
+                // 同時投稿をまとめるための group_ID を取得
                 const gid = (img.tags || []).find(t => t.startsWith('group_')) || `s_${img.public_id}`;
                 if (!groups[gid]) groups[gid] = { images: [], date: img.created_at };
                 groups[gid].images.push(img);
@@ -146,10 +151,11 @@
                 gallery.appendChild(div);
             });
         } catch (e) {
-            gallery.innerHTML = "まだ投稿がありません。";
+            gallery.innerHTML = "投稿がまだありません。";
         }
     }
 
+    // 投稿処理
     async function uploadImages() {
         const fileInput = document.getElementById('file-input');
         const files = Array.from(fileInput.files);
@@ -160,25 +166,31 @@
         btn.disabled = true;
         
         const groupId = `group_${Date.now()}`;
-        const targetClub = document.getElementById('admin-club-select').value;
+        // 【ここが重要】セレクトボックスで「今選んでいる部活」を投稿タグにする
+        const targetClubTag = adminSelect.value;
 
         for (let i = 0; i < files.length; i++) {
             status.innerText = `${i+1}/${files.length}枚送信中...`;
             const fd = new FormData();
             fd.append('file', files[i]);
             fd.append('upload_preset', 'ml_default');
-            fd.append('tags', `${targetClub},${groupId}`);
+            // 選択した部活名とグループIDをセットで送る
+            fd.append('tags', `${targetClubTag},${groupId}`);
 
             await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: fd });
         }
 
-        status.innerText = "完了！";
+        status.innerText = "完了！反映しています...";
         fileInput.value = "";
         
+        // 投稿後に、今見ている画面（currentClub）と投稿先（targetClubTag）が同じなら自動更新
         setTimeout(() => {
-            loadImages();
+            if (currentClub === targetClubTag) {
+                loadImages();
+            } else {
+                status.innerText = `${targetClubTag}へ投稿しました。`;
+            }
             btn.disabled = false;
-            status.innerText = "";
         }, 2000);
     }
 </script>
