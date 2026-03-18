@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>部活動フォトアルバム</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f0f2f5; }
+        .container { max-width: 800px; margin: auto; padding: 20px; }
+        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-top: 20px; }
+        img { width: 100%; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .admin-panel { display: none; background: #fff; padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 2px solid #5865F2; }
+        input, button { padding: 10px; margin: 5px; border-radius: 5px; border: 1px solid #ccc; }
+        #login-btn { background: #5865F2; color: white; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>部活動フォトアルバム</h1>
+
+    <div id="auth-area">
+        <input type="password" id="pass-input" placeholder="部活の合言葉を入れてね">
+        <button onclick="checkPassword()">画像を見る</button>
+    </div>
+
+    <div id="admin-area">
+        <button id="login-btn" onclick="loginDiscord()">Discordで管理者ログイン</button>
+        <div id="upload-panel" class="admin-panel">
+            <h3>管理者メニュー（投稿・削除）</h3>
+            <input type="file" id="file-input">
+            <button onclick="uploadImage()">画像をアップロード</button>
+            <p><small>※「ナギヤのサーバー テスト」の人だけが使えます</small></p>
+        </div>
+    </div>
+
+    <h2 id="club-name"></h2>
+    <div id="gallery" class="gallery"></div>
+</div>
+
+<script>
+    // 教えてくれた「秘密のリスト」をプログラムに覚えさせる
+    const clubData = {
+        "Basket24!": "バスケットボール部",
+        "SoftTennis7": "ソフトテニス部",
+        "VolleyGo11": "バレーボール部",
+        "Muscle99!": "マッチョ部",
+        "DanceStep8": "ダンス部",
+        "KyudoArrow1": "弓道部",
+        "SwimBlue25": "水泳部",
+        "KendoSpirit3": "剣道部",
+        "CheerUp55!": "応援部",
+        "CreativeLab9": "クリエイティ部",
+        "SewingTime6": "被服手芸部",
+        "GokouClub5": "五光倶楽部",
+        "BrassSound4": "吹奏楽部",
+        "CookingStar2": "料理部",
+        "TheaterAct7": "演劇部",
+        "GardenBloom8": "園芸部",
+        "Calligraphy10": "書道部",
+        "TeaZen12": "茶道部",
+        "PhotoSnap3": "写真部",
+        "StarSky88": "天文部",
+	"PrincipalZero0":"学園長",
+	"StudentBase0":"一般生徒"
+    };
+
+    let currentTag = "";
+
+    // 1. パスワードをチェックして画像を表示する
+    function checkPassword() {
+        const pass = document.getElementById('pass-input').value;
+        if (clubData[pass]) {
+            currentTag = clubData[pass];
+            document.getElementById('club-name').innerText = currentTag + " のアルバム";
+            loadImages(currentTag);
+        } else {
+            alert("合言葉がちがうみたいだよ！");
+        }
+    }
+
+    // 2. Cloudinaryから画像を持ってくる（※あとでURLを入れます）
+    function loadImages(tag) {
+        console.log(tag + "の画像を表示するよ");
+        // ここにCloudinaryから画像を取得する魔法を書く
+        const gallery = document.getElementById('gallery');
+        gallery.innerHTML = "<p>画像を読み込み中...</p>";
+    }
+
+    // 3. Discordログインの準備
+    function loginDiscord() {
+        // あなたのClient IDをここにいれるよ
+        const clientId = "ここにClientIDを入れる";
+        const redirectUri = encodeURIComponent(window.location.href);
+        window.location.href = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=identify%20guilds.members.read`;
+    }
+
+    // 4. ページが開かれたときに「管理者か」をチェックする
+    window.onload = function() {
+        const fragment = new URLSearchParams(window.location.hash.slice(1));
+        const accessToken = fragment.get('access_token');
+
+        if (accessToken) {
+            // ここで「ナギヤのサーバー テスト」のチャンネルID 1483618553809731826 を確認する処理
+            document.getElementById('upload-panel').style.display = 'block';
+            document.getElementById('login-btn').style.display = 'none';
+        }
+    }
+</script>
+
+</body>
+</html>
