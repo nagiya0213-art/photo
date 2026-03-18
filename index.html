@@ -97,7 +97,7 @@
 
     let currentTag = "";
     let isAdmin = false;
-    let localImages = []; 
+    let localImages = []; // 即時反映用のメモリ保持用
 
     window.onload = () => {
         const savedAdmin = localStorage.getItem('isAdmin');
@@ -143,10 +143,20 @@
             const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentTag)}.json?cb=${Date.now()}`);
             let cloudResources = res.ok ? (await res.json()).resources : [];
             
-            // サーバーデータと投稿直後のデータを結合
-            const allResources = [...localImages.filter(li => li.tag === currentTag), ...cloudResources];
-            renderGallery(allResources);
+            // 💡 ここがポイント：サーバーデータと投稿直後のデータを結合し、重複を排除する
+            // Mapを使って public_id をキーにして重複を防ぐ
+            const mergedMap = new Map();
+
+            // まずローカルデータを登録
+            localImages.filter(li => li.tag === currentTag).forEach(img => { mergedMap.set(img.public_id, img); });
+
+            // 次にサーバーデータを登録（同じ public_id があれば上書きされる＝ローカルデータが優先される）
+            cloudResources.forEach(img => { mergedMap.set(img.public_id, img); });
+
+            // 配列に戻して描画
+            renderGallery(Array.from(mergedMap.values()));
         } catch (e) {
+            // 通信エラー時も投稿直後の画像は出す
             renderGallery(localImages.filter(li => li.tag === currentTag));
         }
     }
@@ -157,6 +167,7 @@
 
         const groups = {};
         resources.forEach(img => {
+            if (img.format === 'json') return;
             const d = new Date(img.created_at);
             const key = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
             if (!groups[key]) groups[key] = [];
@@ -168,7 +179,9 @@
         let html = "";
         sortedKeys.forEach(date => {
             html += `<div class="post-group"><span class="post-date">📅 ${date} の投稿</span><div class="gallery">`;
-            groups[date].forEach(img => {
+            // 画像も投稿日時の新しい順に並び替え
+            const sortedImages = groups[date].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            sortedImages.forEach(img => {
                 const url = `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/v${img.version}/${img.public_id}.${img.format}`;
                 html += `<img src="${url}" onclick="window.open('${url}', '_blank')">`;
             });
@@ -178,7 +191,8 @@
     }
 
     async function uploadImages() {
-        const files = document.getElementById('file-input').files;
+        const fileInput = document.getElementById('file-input');
+        const files = fileInput.files;
         if(!currentTag || files.length === 0) return alert("画像を選んでね");
 
         const status = document.getElementById('status-msg');
@@ -191,22 +205,31 @@
             formData.append('upload_preset', 'ml_default');
             formData.append('tags', currentTag);
 
-            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
-            const data = await res.json();
-            
-            // 投稿に成功した画像データをメモリに保持（即時反映用）
-            localImages.unshift({
-                public_id: data.public_id,
-                version: data.version,
-                format: data.format,
-                created_at: new Date().toISOString(),
-                tag: currentTag
-            });
-            
-            // リスト取得を待たずに再描画
-            renderGallery([...localImages.filter(li => li.tag === currentTag)]);
+            try {
+                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
+                if (!res.ok) throw new Error();
+                const data = await res.json();
+                
+                // 投稿に成功した画像データを一時的にメモリに保持
+                const newImg = {
+                    public_id: data.public_id,
+                    version: data.version,
+                    format: data.format,
+                    created_at: new Date().toISOString(),
+                    tag: currentTag
+                };
+                localImages.unshift(newImg); // リストの先頭に追加
+                
+                // 💡 投稿するたびに、重複を排除しながら再描画（Mapを使う）
+                const mergedMap = new Map();
+                localImages.filter(li => li.tag === currentTag).forEach(img => { mergedMap.set(img.public_id, img); });
+                renderGallery(Array.from(mergedMap.values()));
+            } catch (err) {
+                alert("送信に失敗しました");
+            }
         }
         status.innerText = "完了！";
+        fileInput.value = "";
         setTimeout(() => { status.innerText = ""; }, 3000);
     }
 
