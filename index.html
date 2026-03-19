@@ -3,40 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>放送広報フォトアルバム（修正版）</title>
+    <title>放送広報フォトアルバム</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f4f7f9; padding: 10px; }
-        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .debug-log { background: #333; color: #0f0; text-align: left; padding: 10px; font-family: monospace; font-size: 11px; border-radius: 5px; margin: 10px 0; max-height: 150px; overflow-y: auto; }
-        .error-display { color: #ff4757; font-weight: bold; border: 2px solid #ff4757; padding: 10px; margin: 10px 0; display: none; background: #fff1f2; }
-        .admin-panel { background: #eef2ff; padding: 20px; border-radius: 10px; border: 2px dashed #5865F2; margin: 20px 0; }
-        select, input, button { padding: 12px; margin: 5px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; }
-        button { background: #5865F2; color: white; border: none; font-weight: bold; cursor: pointer; }
-        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin-top: 20px; }
-        img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; cursor: pointer; }
+        /* 基本スタイル */
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; text-align: center; background: #f4f7f9; color: #333; margin: 0; padding: 10px; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); box-sizing: border-box; }
+        h1 { color: #2c3e50; font-size: 1.4rem; margin-bottom: 20px; }
+
+        /* 入力フォーム */
+        .auth-section { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee; }
+        input[type="password"], select { 
+            padding: 12px; margin: 5px 0; border-radius: 8px; border: 1px solid #ddd; 
+            font-size: 16px; width: 100%; box-sizing: border-box; 
+        }
+
+        /* 管理者パネル */
+        .admin-panel { display: none; background: #eef2ff; padding: 15px; border-radius: 10px; border: 2px dashed #5865F2; margin: 20px 0; }
+        
+        /* スマホではみ出さないためのファイル選択設定 */
+        input[type="file"] { 
+            padding: 10px; margin: 10px 0; font-size: 14px; width: 100%; 
+            background: #fff; border-radius: 5px; border: 1px solid #ddd; 
+            box-sizing: border-box; display: block; 
+        }
+
+        /* ボタン類 */
+        button { 
+            cursor: pointer; transition: 0.2s; background: #5865F2; color: white; border: none; 
+            font-weight: bold; padding: 12px; border-radius: 8px; margin: 5px 0; width: 100%; font-size: 16px;
+        }
+        button:active { transform: scale(0.98); opacity: 0.9; }
+        .discord-btn { background: #7289da; }
+        .logout-btn { background: #ff4757; font-size: 13px; padding: 8px; width: auto; min-width: 100px; }
+        .upload-btn { background: #2ecc71; margin-top: 10px; }
+
+        /* ギャラリー */
+        #club-display { margin: 20px 0 10px; font-size: 1.2rem; color: #34495e; font-weight: bold; }
+        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; margin-top: 15px; }
+        img { width: 100%; height: 100px; object-fit: cover; border-radius: 8px; cursor: pointer; background: #eee; border: 1px solid #eee; }
+        
+        #status-msg { color: #5865F2; font-size: 14px; margin-top: 5px; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🎙️ フォトアルバム</h1>
-
-    <div id="error-box" class="error-display"></div>
-    <div id="debug-console" class="debug-log">システムログ待機中...</div>
+    <h1>🎙️ 放送広報フォトアルバム</h1>
 
     <div class="auth-section">
         <input type="password" id="pass-input" placeholder="合言葉を入力">
         <button onclick="checkPassword()">画像を見る</button>
+        
+        <div style="margin-top:15px;">
+            <button id="login-btn" class="discord-btn" onclick="loginDiscord()">管理者ログイン (Discord)</button>
+            <button id="logout-btn" class="logout-btn" onclick="logout()" style="display:none;">ログアウト</button>
+        </div>
     </div>
 
     <div id="upload-panel" class="admin-panel">
-        <h3>🛠 管理者メニュー</h3>
+        <h3 style="margin-top:0; font-size:1rem;">🛠 管理者メニュー</h3>
         <select id="admin-club-select" onchange="syncClub()">
-            <option value="">-- 読込中 --</option>
+            <option value="">-- 投稿先の部活を選択 --</option>
         </select>
-        <br>
         <input type="file" id="file-input" accept="image/*" multiple>
-        <button onclick="uploadImages()" style="background:#2ecc71;">一括投稿する</button>
+        <button class="upload-btn" onclick="uploadImages()">一括投稿する</button>
+        <div id="status-msg"></div>
     </div>
 
     <h2 id="club-display">合言葉を入れてね</h2>
@@ -46,69 +77,56 @@
 <script>
     // --- 【設定】 ---
     const CLOUD_NAME = "dn8jcukh0";
-    const CLIENT_ID = "1483619678940303410"; 
+    const CLIENT_ID = "1483619678940303410"; // ここにクライアントIDを入れる
     const SPREADSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRq1silbLpzyiWDBvelhaP30L_h8lqImVBHque9AbTGJ-VEIMjWfE8-k8jlddOGgFo9CbOoeaDqGSzX/pub?gid=0&single=true&output=csv"; 
     // ---------------
 
     let clubData = {};
     let currentTag = "";
 
-    function log(msg, isError = false) {
-        const consoleEl = document.getElementById('debug-console');
-        consoleEl.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${isError ? '<span style="color:red">ERR:</span> ' : ''}${msg}</div>`;
-        consoleEl.scrollTop = consoleEl.scrollHeight;
-    }
-
     window.onload = async () => {
-        log("スプレッドシート取得開始...");
         await fetchClubList();
+
+        // Discordログイン後のURLパラメータ解析
+        const params = new URLSearchParams(window.location.hash.slice(1));
+        const token = params.get('access_token');
+        const savedAdmin = localStorage.getItem('isAdmin');
+
+        if (token || savedAdmin === 'true') {
+            showAdminPanel();
+            if (token) {
+                localStorage.setItem('isAdmin', 'true');
+                // URLを綺麗にする（アクセストークンを隠す）
+                history.replaceState(null, null, window.location.pathname);
+            }
+        }
     };
 
     async function fetchClubList() {
-        const select = document.getElementById('admin-club-select');
-        const errorBox = document.getElementById('error-box');
-
         try {
-            // 💡 ポイント：?cb=...を付けずにfetchする（スプシの400エラー対策）
             const res = await fetch(SPREADSHEET_CSV_URL);
-            log(`HTTPステータス: ${res.status}`);
-
-            if (!res.ok) throw new Error(`Status: ${res.status}`);
-
+            if (!res.ok) throw new Error();
             const text = await res.text();
-            log(`データ受信完了 (${text.length} bytes)`);
-
             const rows = text.split(/\r?\n/);
+            const select = document.getElementById('admin-club-select');
             select.innerHTML = '<option value="">-- 投稿先の部活を選択 --</option>';
-            clubData = {};
-            let count = 0;
-
+            
             rows.forEach(row => {
                 const cols = row.split(',');
                 if (cols.length >= 2) {
                     const pass = cols[0].trim().replace(/^"|"$/g, '');
                     const name = cols[1].trim().replace(/^"|"$/g, '');
-                    
-                    // 💡 ゴミデータ排除
                     if (!pass || !name || pass.includes("initial-scale") || pass === "合言葉") return;
-
+                    
                     clubData[pass] = name;
                     const opt = document.createElement('option');
                     opt.value = name;
                     opt.textContent = name;
                     select.appendChild(opt);
-                    count++;
                 }
             });
-
-            if (count === 0) throw new Error("有効なリストが0件です。CSVの形式を確認してください。");
-            log(`成功：${count}件読み込みました。`);
-            errorBox.style.display = "none";
-
         } catch (e) {
-            log(e.message, true);
-            errorBox.innerText = `【接続エラー】${e.message}\nスプレッドシートがCSV形式で公開されているか確認してください。`;
-            errorBox.style.display = "block";
+            console.error("スプシ読み込み失敗");
         }
     }
 
@@ -128,22 +146,22 @@
         const container = document.getElementById('gallery-container');
         container.innerHTML = "読込中...";
         try {
-            // Cloudinaryは ?cb= を付けても大丈夫（キャッシュ回避）
             const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentTag)}.json?cb=${Date.now()}`);
             if (!res.ok) {
-                container.innerHTML = res.status === 404 ? "まだ画像がありません。" : "取得エラー";
+                container.innerHTML = res.status === 404 ? "<p>まだ画像がありません。</p>" : "<p>取得エラー</p>";
                 return;
             }
             const data = await res.json();
             renderGallery(data.resources);
         } catch (e) {
-            container.innerHTML = "読み込み失敗";
+            container.innerHTML = "<p>読み込み失敗</p>";
         }
     }
 
     function renderGallery(resources) {
         const container = document.getElementById('gallery-container');
         let html = '<div class="gallery">';
+        resources.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         resources.forEach(img => {
             const url = `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/v${img.version}/${img.public_id}.${img.format}`;
             html += `<img src="${url}" onclick="window.open('${url}', '_blank')">`;
@@ -163,16 +181,41 @@
     async function uploadImages() {
         const fileInput = document.getElementById('file-input');
         const files = fileInput.files;
-        if(!currentTag || files.length === 0) return alert("画像を選んでね");
-        for (let file of files) {
+        const status = document.getElementById('status-msg');
+        if(!currentTag || files.length === 0) return alert("部活選択と画像選択をしてね");
+        
+        for (let i = 0; i < files.length; i++) {
+            status.innerText = `${i+1}/${files.length}枚目をアップ中...`;
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('file', files[i]);
             formData.append('upload_preset', 'ml_default');
             formData.append('tags', currentTag);
-            await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
+            try {
+                await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
+            } catch (e) { console.error("Upload Error"); }
         }
-        alert("完了！");
+        status.innerText = "完了！";
+        fileInput.value = "";
         loadImages();
+        setTimeout(() => { status.innerText = ""; }, 3000);
+    }
+
+    // Discord連携機能
+    function loginDiscord() {
+        const redirectUri = encodeURIComponent(window.location.href.split('#')[0]);
+        const url = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${redirectUri}&response_type=token&scope=identify`;
+        window.location.href = url;
+    }
+
+    function showAdminPanel() {
+        document.getElementById('upload-panel').style.display = 'block';
+        document.getElementById('login-btn').style.display = 'none';
+        document.getElementById('logout-btn').style.display = 'inline-block';
+    }
+
+    function logout() {
+        localStorage.removeItem('isAdmin');
+        location.reload();
     }
 </script>
 </body>
