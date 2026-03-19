@@ -3,22 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>デバッグ版：放送広報フォトアルバム</title>
+    <title>放送広報フォトアルバム（修正版）</title>
     <style>
         body { font-family: sans-serif; text-align: center; background: #f4f7f9; padding: 10px; }
-        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 15px; }
-        .debug-log { background: #333; color: #0f0; text-align: left; padding: 10px; font-family: monospace; font-size: 12px; border-radius: 5px; margin: 10px 0; max-height: 200px; overflow-y: auto; }
-        .error-display { color: #ff4757; font-weight: bold; border: 1px solid #ff4757; padding: 10px; margin: 10px 0; display: none; }
-        .admin-panel { background: #eef2ff; padding: 20px; border-radius: 10px; margin: 20px 0; }
-        select, input, button { padding: 10px; margin: 5px; border-radius: 5px; border: 1px solid #ccc; }
-        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
-        img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .debug-log { background: #333; color: #0f0; text-align: left; padding: 10px; font-family: monospace; font-size: 11px; border-radius: 5px; margin: 10px 0; max-height: 150px; overflow-y: auto; }
+        .error-display { color: #ff4757; font-weight: bold; border: 2px solid #ff4757; padding: 10px; margin: 10px 0; display: none; background: #fff1f2; }
+        .admin-panel { background: #eef2ff; padding: 20px; border-radius: 10px; border: 2px dashed #5865F2; margin: 20px 0; }
+        select, input, button { padding: 12px; margin: 5px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; }
+        button { background: #5865F2; color: white; border: none; font-weight: bold; cursor: pointer; }
+        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin-top: 20px; }
+        img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; cursor: pointer; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🎙️ フォトアルバム（スプシ診断モード）</h1>
+    <h1>🎙️ フォトアルバム</h1>
 
     <div id="error-box" class="error-display"></div>
     <div id="debug-console" class="debug-log">システムログ待機中...</div>
@@ -31,14 +32,14 @@
     <div id="upload-panel" class="admin-panel">
         <h3>🛠 管理者メニュー</h3>
         <select id="admin-club-select" onchange="syncClub()">
-            <option value="">-- スプシ読み込み中 --</option>
+            <option value="">-- 読込中 --</option>
         </select>
         <br>
         <input type="file" id="file-input" accept="image/*" multiple>
-        <button onclick="uploadImages()">アップロード</button>
+        <button onclick="uploadImages()" style="background:#2ecc71;">一括投稿する</button>
     </div>
 
-    <h2 id="club-display">合言葉を入れてください</h2>
+    <h2 id="club-display">合言葉を入れてね</h2>
     <div id="gallery-container"></div>
 </div>
 
@@ -52,16 +53,14 @@
     let clubData = {};
     let currentTag = "";
 
-    // ログ出力用関数
     function log(msg, isError = false) {
         const consoleEl = document.getElementById('debug-console');
-        const time = new Date().toLocaleTimeString();
-        consoleEl.innerHTML += `<div>[${time}] ${isError ? '<span style="color:red">ERR:</span> ' : ''}${msg}</div>`;
+        consoleEl.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${isError ? '<span style="color:red">ERR:</span> ' : ''}${msg}</div>`;
         consoleEl.scrollTop = consoleEl.scrollHeight;
     }
 
     window.onload = async () => {
-        log("ページ読み込み完了。スプレッドシートの取得を開始します...");
+        log("スプレッドシート取得開始...");
         await fetchClubList();
     };
 
@@ -70,33 +69,27 @@
         const errorBox = document.getElementById('error-box');
 
         try {
-            log(`Fetching URL: ${SPREADSHEET_CSV_URL}`);
-            const res = await fetch(SPREADSHEET_CSV_URL;
-            
-            log(`Response Status: ${res.status} ${res.statusText}`);
+            // 💡 ポイント：?cb=...を付けずにfetchする（スプシの400エラー対策）
+            const res = await fetch(SPREADSHEET_CSV_URL);
+            log(`HTTPステータス: ${res.status}`);
 
-            if (!res.ok) {
-                throw new Error(`サーバーがエラーを返しました (Status: ${res.status})。URLが正しいか、公開設定を確認してください。`);
-            }
+            if (!res.ok) throw new Error(`Status: ${res.status}`);
 
             const text = await res.text();
-            log(`取得データサイズ: ${text.length} bytes`);
-            
-            if (!text.includes(",")) {
-                log("警告: 取得したデータにカンマが含まれていません。CSV形式ではない可能性があります。", true);
-            }
+            log(`データ受信完了 (${text.length} bytes)`);
 
             const rows = text.split(/\r?\n/);
             select.innerHTML = '<option value="">-- 投稿先の部活を選択 --</option>';
             clubData = {};
             let count = 0;
 
-            rows.forEach((row, index) => {
+            rows.forEach(row => {
                 const cols = row.split(',');
                 if (cols.length >= 2) {
                     const pass = cols[0].trim().replace(/^"|"$/g, '');
                     const name = cols[1].trim().replace(/^"|"$/g, '');
                     
+                    // 💡 ゴミデータ排除
                     if (!pass || !name || pass.includes("initial-scale") || pass === "合言葉") return;
 
                     clubData[pass] = name;
@@ -108,49 +101,43 @@
                 }
             });
 
-            if (count === 0) {
-                throw new Error("CSVデータは見つかりましたが、有効な部活リストが1件もありません。フォーマットを確認してください。");
-            }
-
-            log(`成功：${count}件の部活を読み込みました。`);
+            if (count === 0) throw new Error("有効なリストが0件です。CSVの形式を確認してください。");
+            log(`成功：${count}件読み込みました。`);
             errorBox.style.display = "none";
 
         } catch (e) {
             log(e.message, true);
-            errorBox.innerText = `【接続エラー】 ${e.message}`;
+            errorBox.innerText = `【接続エラー】${e.message}\nスプレッドシートがCSV形式で公開されているか確認してください。`;
             errorBox.style.display = "block";
-            select.innerHTML = '<option value="">-- 読み込み失敗 --</option>';
         }
     }
 
-    // --- 以下、既存のロジック ---
     function checkPassword() {
         const pass = document.getElementById('pass-input').value;
         if (clubData[pass]) {
             currentTag = clubData[pass];
             document.getElementById('club-display').innerText = currentTag;
             loadImages();
-        } else { alert("合言葉が一致しません。スプシのA列を確認してください。"); }
+        } else {
+            alert("合言葉が違います");
+        }
     }
 
     async function loadImages() {
         if (!currentTag) return;
         const container = document.getElementById('gallery-container');
-        container.innerHTML = "読み込み中...";
+        container.innerHTML = "読込中...";
         try {
+            // Cloudinaryは ?cb= を付けても大丈夫（キャッシュ回避）
             const res = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/${encodeURIComponent(currentTag)}.json?cb=${Date.now()}`);
             if (!res.ok) {
-                if(res.status === 404) {
-                    container.innerHTML = "この部活の画像はまだありません。";
-                    return;
-                }
-                throw new Error("Cloudinaryからの取得に失敗しました。");
+                container.innerHTML = res.status === 404 ? "まだ画像がありません。" : "取得エラー";
+                return;
             }
             const data = await res.json();
             renderGallery(data.resources);
         } catch (e) {
-            container.innerHTML = "画像一覧を取得できませんでした。";
-            log(e.message, true);
+            container.innerHTML = "読み込み失敗";
         }
     }
 
@@ -167,7 +154,24 @@
 
     function syncClub() {
         currentTag = document.getElementById('admin-club-select').value;
-        document.getElementById('club-display').innerText = currentTag;
+        if(currentTag) {
+            document.getElementById('club-display').innerText = currentTag;
+            loadImages();
+        }
+    }
+
+    async function uploadImages() {
+        const fileInput = document.getElementById('file-input');
+        const files = fileInput.files;
+        if(!currentTag || files.length === 0) return alert("画像を選んでね");
+        for (let file of files) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', 'ml_default');
+            formData.append('tags', currentTag);
+            await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
+        }
+        alert("完了！");
         loadImages();
     }
 </script>
